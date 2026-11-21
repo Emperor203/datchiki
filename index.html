@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Web Sensor Hub // Телеметрия и Диагностика Датчиков</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#0f172a',
+              900: '#0b1120',
+              950: '#030712',
+            },
+            tech: {
+              cyan: '#06b6d4',
+              emerald: '#10b981',
+              amber: '#f59e0b',
+              rose: '#f43f5e',
+              violet: '#8b5cf6',
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          animation: {
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'radar': 'radar 3s linear infinite',
+            'shake': 'shake 0.5s ease-in-out',
+          },
+          keyframes: {
+            radar: {
+              '0%': { transform: 'rotate(0deg)' },
+              '100%': { transform: 'rotate(360deg)' },
+            },
+            shake: {
+              '0%, 100%': { transform: 'translateX(0)' },
+              '20%, 60%': { transform: 'translateX(-6px)' },
+              '40%, 80%': { transform: 'translateX(6px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #030712;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+
+    /* Glow utilities */
+    .glow-cyan {
+      box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.35);
+    }
+    .glow-emerald {
+      box-shadow: 0 0 20px -5px rgba(16, 185, 129, 0.35);
+    }
+    .glow-rose {
+      box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.35);
+    }
+    .glow-amber {
+      box-shadow: 0 0 20px -5px rgba(245, 158, 11, 0.35);
+    }
+
+    /* Scanline overlay for cyber telemetry feel */
+    .scanlines {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.02),
+        rgba(0, 255, 0, 0.01),
+        rgba(0, 0, 255, 0.02)
+      );
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+    }
+
+    canvas {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+
+    /* Range slider custom styling */
+    input[type=range] {
+      accent-color: #06b6d4;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans selection:bg-cyan-500/30 selection:text-cyan-300 antialiased relative pb-16">
+  
+  <!-- Background Ambient Glow & Grid -->
+  <div class="fixed inset-0 pointer-events-none opacity-20 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] z-0"></div>
+  <div class="fixed -top-40 -left-40 w-96 h-96 bg-cyan-600/10 rounded-full blur-[128px] pointer-events-none"></div>
+  <div class="fixed top-1/2 -right-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-[128px] pointer-events-none"></div>
+
+  <!-- Main Container -->
+  <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+    <!-- HEADER & STATUS BAR -->
+    <header class="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3.5">
+          <div class="relative flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 via-slate-800 to-slate-900 border border-cyan-500/40 text-cyan-400 shadow-lg glow-cyan">
+            <svg class="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+          </div>
+
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                WEB SENSOR HUB
+                <span class="text-xs font-mono uppercase px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+                  Telemetry v2.4
+                </span>
+              </h1>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-400">
+              Диагностика аппаратных датчиков, Web API и IoT-интерфейсов устройства
+            </p>
+          </div>
+        </div>
+
+        <!-- Master Actions & Security Badges -->
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Protocol/HTTPS Security Pill -->
+          <div id="httpsBadge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border transition-all">
+            <span class="w-2 h-2 rounded-full"></span>
+            <span id="httpsText">Проверка протокола...</span>
+          </div>
+
+          <!-- Master Activate Sensors Button -->
+          <button id="btnActivateAll" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-semibold text-xs sm:text-sm tracking-wide shadow-lg shadow-cyan-500/20 active:scale-95 transition-all">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>АКТИВИРОВАТЬ ВСЕ СЕНСОРЫ</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Quick Telemetry Ticker -->
+      <div class="mt-4 pt-4 border-t border-slate-800/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono text-slate-400">
+        <div class="flex items-center justify-between bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/50">
+          <span class="text-slate-500">ПИТАНИЕ:</span>
+          <span id="quickBattery" class="text-emerald-400 font-bold">--%</span>
+        </div>
+        <div class="flex items-center justify-between bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/50">
+          <span class="text-slate-500">СЕТЬ:</span>
+          <span id="quickNetwork" class="text-cyan-400 font-bold">ONLINE</span>
+        </div>
+        <div class="flex items-center justify-between bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/50">
+          <span class="text-slate-500">ОРИЕНТАЦИЯ:</span>
+          <span id="quickOrientation" class="text-amber-400 font-bold">PORTRAIT</span>
+        </div>
+        <div class="flex items-center justify-between bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/50">
+          <span class="text-slate-500">ЯДРА CPU:</span>
+          <span id="quickCpu" class="text-slate-200 font-bold">--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN GRID: DASHBOARD MODULES -->
+    <main class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+
+      <!-- ========================================== -->
+      <!-- БЛОК А: 1. ГИРОСКОП И 3D ОРИЕНТАЦИЯ        -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-cyan-500/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">3D-Ориентация и Гироскоп</h2>
+                <p class="text-xs text-slate-400 font-mono">DeviceOrientation API</p>
+              </div>
+            </div>
+            <span id="gyroStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">
+              STANDBY
+            </span>
+          </div>
+
+          <!-- 3D Three.js Viewport Container -->
+          <div class="relative mt-4 w-full h-52 bg-slate-950/80 rounded-xl border border-slate-800/80 overflow-hidden flex items-center justify-center">
+            <div id="threeContainer" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+            
+            <!-- 3D Overlay Help / Switcher -->
+            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between px-2.5 py-1 bg-slate-900/80 backdrop-blur rounded text-[11px] font-mono text-slate-400 border border-slate-800/60 pointer-events-none">
+              <span id="threeInteractionMode">МЫШЬ / ТАЧ ВРАЩЕНИЕ</span>
+              <span class="text-cyan-400">THREE.JS 3D</span>
+            </div>
+          </div>
+
+          <!-- Numeric Telemetry Readings -->
+          <div class="grid grid-cols-3 gap-2 mt-4 font-mono text-xs">
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[10px] text-slate-500 block uppercase">Alpha (Z)</span>
+              <span id="valAlpha" class="text-sm font-bold text-cyan-400">0.0°</span>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[10px] text-slate-500 block uppercase">Beta (X)</span>
+              <span id="valBeta" class="text-sm font-bold text-emerald-400">0.0°</span>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[10px] text-slate-500 block uppercase">Gamma (Y)</span>
+              <span id="valGamma" class="text-sm font-bold text-rose-400">0.0°</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnRequestGyro" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Подключить Гироскоп
+          </button>
+          <button id="btnReset3D" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 transition-colors border border-slate-700" title="Сбросить ориентацию в 0°">
+            Сброс
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК А: 2. АКСЕЛЕРОМЕТР И ДЕТЕКТОР ТРЯСКИ -->
+      <!-- ========================================== -->
+      <section id="shakeCard" class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-emerald-500/40 transition-all">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Акселерометр & Shake</h2>
+                <p class="text-xs text-slate-400 font-mono">DeviceMotionEvent</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span id="shakeIndicator" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700 transition-colors">
+                ТРЯСКА: НЕТ
+              </span>
+            </div>
+          </div>
+
+          <!-- Accelerometer Live Graph Canvas -->
+          <div class="relative mt-4 w-full h-36 bg-slate-950/80 rounded-xl border border-slate-800/80 overflow-hidden">
+            <canvas id="accelCanvas" class="w-full h-full block"></canvas>
+            <div class="absolute top-2 left-2 flex items-center gap-2 text-[10px] font-mono">
+              <span class="flex items-center gap-1 text-rose-400"><span class="w-2 h-0.5 bg-rose-500 inline-block"></span> X</span>
+              <span class="flex items-center gap-1 text-emerald-400"><span class="w-2 h-0.5 bg-emerald-500 inline-block"></span> Y</span>
+              <span class="flex items-center gap-1 text-cyan-400"><span class="w-2 h-0.5 bg-cyan-500 inline-block"></span> Z</span>
+            </div>
+            <div id="accelScaleIndicator" class="absolute top-2 right-2 text-[9px] font-mono text-slate-500">
+              ±20 m/s²
+            </div>
+          </div>
+
+          <!-- Telemetry & Shake Stats -->
+          <div class="grid grid-cols-4 gap-2 mt-4 font-mono text-xs">
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">X (m/s²)</span>
+              <span id="valAccX" class="font-bold text-rose-400">0.00</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">Y (m/s²)</span>
+              <span id="valAccY" class="font-bold text-emerald-400">0.00</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">Z (m/s²)</span>
+              <span id="valAccZ" class="font-bold text-cyan-400">0.00</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center bg-emerald-950/20 border-emerald-900/40">
+              <span class="text-[9px] text-emerald-400 block font-semibold">SHAKES</span>
+              <span id="valShakeCount" class="font-bold text-white text-sm">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnRequestAccel" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Старт Акселерометра
+          </button>
+          <button id="btnSimulateShake" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-mono transition-colors border border-emerald-500/30" title="Протестировать детектор встряхивания на десктопе">
+            Тест Тряски
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК А: 3. ГЕОЛОКАЦИЯ И ЦИФРОВОЙ КОМПАС    -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-amber-500/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Геолокация & Компас</h2>
+                <p class="text-xs text-slate-400 font-mono">Geolocation & Heading</p>
+              </div>
+            </div>
+            <span id="geoStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">
+              STANDBY
+            </span>
+          </div>
+
+          <!-- Compass Dial & Info Row -->
+          <div class="mt-4 flex items-center gap-4">
+            <!-- Compass SVG Wheel -->
+            <div class="relative w-32 h-32 flex-shrink-0 flex items-center justify-center">
+              <div class="w-full h-full rounded-full border border-slate-800 bg-slate-950/90 shadow-inner flex items-center justify-center relative overflow-hidden">
+                <!-- Compass Rose / Degree Markings -->
+                <div class="absolute inset-1 rounded-full border border-slate-800/60"></div>
+                <div class="absolute top-1 text-[9px] font-bold font-mono text-rose-500">N</div>
+                <div class="absolute bottom-1 text-[9px] font-bold font-mono text-slate-400">S</div>
+                <div class="absolute right-1 text-[9px] font-bold font-mono text-slate-400">E</div>
+                <div class="absolute left-1 text-[9px] font-bold font-mono text-slate-400">W</div>
+
+                <!-- Compass Needle -->
+                <div id="compassNeedle" class="w-full h-full transition-transform duration-100 ease-out flex items-center justify-center pointer-events-none">
+                  <svg class="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                    <!-- North Pointer -->
+                    <polygon points="50,15 56,50 44,50" fill="#f43f5e" />
+                    <!-- South Pointer -->
+                    <polygon points="50,85 56,50 44,50" fill="#64748b" />
+                    <circle cx="50" cy="50" r="4" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Center Digital Heading -->
+              <div class="absolute -bottom-2 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono font-bold text-amber-400 shadow">
+                <span id="valHeadingDeg">0°</span> <span id="valHeadingDir">N</span>
+              </div>
+            </div>
+
+            <!-- Coordinate Readouts -->
+            <div class="flex-1 space-y-1.5 font-mono text-xs">
+              <div class="bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800/60 flex justify-between">
+                <span class="text-slate-500 text-[10px]">ШИРОТА:</span>
+                <span id="valLat" class="text-slate-200">--.------°</span>
+              </div>
+              <div class="bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800/60 flex justify-between">
+                <span class="text-slate-500 text-[10px]">ДОЛГОТА:</span>
+                <span id="valLng" class="text-slate-200">--.------°</span>
+              </div>
+              <div class="bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800/60 flex justify-between">
+                <span class="text-slate-500 text-[10px]">ТОЧНОСТЬ:</span>
+                <span id="valAccuracy" class="text-emerald-400">±-- м</span>
+              </div>
+              <div class="bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800/60 flex justify-between">
+                <span class="text-slate-500 text-[10px]">ВЫСОТА:</span>
+                <span id="valAltitude" class="text-cyan-400">-- м</span>
+              </div>
+              <div class="bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800/60 flex justify-between">
+                <span class="text-slate-500 text-[10px]">СКОРОСТЬ:</span>
+                <span id="valSpeed" class="text-amber-400">0.0 км/ч</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnRequestGeo" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Запустить GPS & Компас
+          </button>
+          <a id="btnOpenMaps" href="#" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-400 transition-colors border border-slate-700 pointer-events-none opacity-50" title="Открыть точку на карте">
+            Карта ↗
+          </a>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК Б: 4. КАМЕРА И ДАТЧИК ОСВЕЩЕННОСТИ    -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-tech-cyan/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Оптика & Освещенность</h2>
+                <p class="text-xs text-slate-400 font-mono">Camera & AmbientLight API</p>
+              </div>
+            </div>
+            <span id="lightSensorMethod" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">
+              STANDBY
+            </span>
+          </div>
+
+          <!-- Video Viewport / Reticle -->
+          <div class="relative mt-4 w-full h-40 bg-slate-950 rounded-xl border border-slate-800/80 overflow-hidden flex items-center justify-center">
+            <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+            
+            <div id="cameraPlaceholder" class="text-center p-4">
+              <svg class="w-10 h-10 mx-auto text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              </svg>
+              <span class="text-xs text-slate-500 font-mono">Камера отключена</span>
+            </div>
+
+            <!-- Viewfinder HUD Lines (When camera is on) -->
+            <div id="cameraHud" class="absolute inset-0 pointer-events-none hidden border-2 border-cyan-500/30 m-2 rounded-lg flex items-center justify-center">
+              <div class="w-6 h-6 border-t-2 border-l-2 border-cyan-400 absolute top-2 left-2"></div>
+              <div class="w-6 h-6 border-t-2 border-r-2 border-cyan-400 absolute top-2 right-2"></div>
+              <div class="w-6 h-6 border-b-2 border-l-2 border-cyan-400 absolute bottom-2 left-2"></div>
+              <div class="w-6 h-6 border-b-2 border-r-2 border-cyan-400 absolute bottom-2 right-2"></div>
+              <div class="w-2 h-2 rounded-full bg-cyan-400/80"></div>
+              <span class="absolute top-2 right-4 text-[9px] font-mono text-cyan-300 bg-slate-950/80 px-1 rounded">LIVE FEED</span>
+            </div>
+          </div>
+
+          <!-- Illuminance Telemetry Bar -->
+          <div class="mt-4 space-y-1.5 font-mono text-xs">
+            <div class="flex items-center justify-between text-slate-300">
+              <span>ОСВЕЩЕННОСТЬ:</span>
+              <span id="valLux" class="text-amber-400 font-bold text-sm">-- lx</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full h-2.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
+              <div id="luxBar" class="h-full bg-gradient-to-r from-amber-500 to-yellow-300 w-0 transition-all duration-300"></div>
+            </div>
+            <div class="flex justify-between text-[9px] text-slate-500">
+              <span>Темнота (0)</span>
+              <span>Комната (200-500)</span>
+              <span>Яркий день (1000+)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnToggleCamera" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Включить Камеру
+          </button>
+          <button id="btnRequestAmbientSensor" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 transition-colors border border-slate-700" title="Подключить нативный AmbientLightSensor">
+            Нативный Люксметр
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК Б: 5. МИКРОФОН И СПЕКТРОАНАЛИЗАТОР    -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-tech-violet/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Акустика & Спектр</h2>
+                <p class="text-xs text-slate-400 font-mono">Web Audio API / AnalyserNode</p>
+              </div>
+            </div>
+            <span id="audioStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">
+              STANDBY
+            </span>
+          </div>
+
+          <!-- Audio Equalizer Spectrum Canvas -->
+          <div class="relative mt-4 w-full h-36 bg-slate-950/80 rounded-xl border border-slate-800/80 overflow-hidden">
+            <canvas id="audioCanvas" class="w-full h-full block"></canvas>
+            <div class="absolute top-2 left-2 text-[10px] font-mono text-slate-500">
+              FFT SPECTRUM (32 BARS)
+            </div>
+            <!-- Decibel Numeric Overlay -->
+            <div class="absolute top-2 right-2 text-right">
+              <span id="valDecibels" class="text-sm font-bold font-mono text-violet-400">-- dB</span>
+            </div>
+          </div>
+
+          <!-- Volume Meter & Noise Level Scale -->
+          <div class="mt-4 space-y-1.5 font-mono text-xs">
+            <div class="flex justify-between text-slate-400 text-[10px]">
+              <span>УРОВЕНЬ ШУМА:</span>
+              <span id="noiseCategory" class="text-slate-200">ТИШИНА</span>
+            </div>
+            <div class="w-full h-2 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
+              <div id="volumeBar" class="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 w-0 transition-all duration-75"></div>
+            </div>
+            <div class="flex justify-between text-[9px] text-slate-500">
+              <span>30 dB (Шёпот)</span>
+              <span>60 dB (Речь)</span>
+              <span>90+ dB (Громко)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnToggleAudio" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Запустить Микрофон
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК Б: 6. СЕНСОРНЫЙ ЭКРАН, ПЕРО & ВИБРО   -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-tech-rose/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Тачпад, Перо & Вибро</h2>
+                <p class="text-xs text-slate-400 font-mono">Pointer & Vibration API</p>
+              </div>
+            </div>
+            <span id="pointerTypeBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">
+              IDLE
+            </span>
+          </div>
+
+          <!-- Interactive Touchpad Canvas -->
+          <div class="relative mt-4 w-full h-36 bg-slate-950/90 rounded-xl border border-slate-800/80 overflow-hidden touch-none select-none">
+            <canvas id="touchpadCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+              <span class="text-[11px] font-mono text-slate-500 tracking-wider">ИНТЕРАКТИВНЫЙ ТАЧПАД (НАЖМИТЕ)</span>
+            </div>
+          </div>
+
+          <!-- Touch & Stylus Telemetry -->
+          <div class="grid grid-cols-4 gap-2 mt-4 font-mono text-xs">
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">X / Y</span>
+              <span id="valTouchCoords" class="font-bold text-slate-200">0, 0</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">НАЖАТИЕ</span>
+              <span id="valTouchPressure" class="font-bold text-rose-400">0.00</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">НАКЛОН X/Y</span>
+              <span id="valTouchTilt" class="font-bold text-cyan-400">0°, 0°</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/60 text-center">
+              <span class="text-[9px] text-slate-500 block">ВИБРОМОТОР</span>
+              <span id="vibeSupportText" class="font-bold text-emerald-400 text-[10px]">ДА</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls: Vibration Test Patterns -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnVibratePulse" class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Импульс
+          </button>
+          <button id="btnVibrateSos" class="flex-1 px-2.5 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 text-xs font-mono transition-colors border border-rose-500/30">
+            SOS Паттерн
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК В: 7. ВНЕШНИЕ АППАРАТНЫЕ ДАТЧИКИ (IoT)-->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-cyan-500/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">IoT & Внешние Интерфейсы</h2>
+                <p class="text-xs text-slate-400 font-mono">Web Bluetooth, Serial & NFC</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+              HARDWARE
+            </span>
+          </div>
+
+          <!-- Hardware Action Buttons -->
+          <div class="grid grid-cols-3 gap-2 mt-4 font-mono text-xs">
+            <button id="btnConnectBle" class="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/60 transition-all text-center group">
+              <span class="text-cyan-400 group-hover:text-cyan-300 block font-bold">Bluetooth</span>
+              <span class="text-[9px] text-slate-500">BLE / Пульс</span>
+            </button>
+            <button id="btnConnectSerial" class="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/60 transition-all text-center group">
+              <span class="text-emerald-400 group-hover:text-emerald-300 block font-bold">Serial (USB)</span>
+              <span class="text-[9px] text-slate-500">UART / COM</span>
+            </button>
+            <button id="btnConnectNfc" class="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/60 transition-all text-center group">
+              <span class="text-amber-400 group-hover:text-amber-300 block font-bold">Web NFC</span>
+              <span class="text-[9px] text-slate-500">NDEF Метки</span>
+            </button>
+          </div>
+
+          <!-- Terminal Output Log -->
+          <div class="mt-4 relative">
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+              <span>КОНСОЛЬ СВЯЗИ:</span>
+              <button id="btnClearIotLog" class="hover:text-cyan-400 transition-colors">Очистить</button>
+            </div>
+            <div id="iotLog" class="w-full h-32 bg-slate-950 rounded-xl border border-slate-800/80 p-2.5 font-mono text-[11px] text-slate-300 overflow-y-auto space-y-1 scanlines">
+              <div class="text-slate-500">[SYS] Инициализация внешних аппаратных шин...</div>
+              <div class="text-slate-500">[SYS] Готов к сканированию BLE, Serial и NFC.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 text-[10px] font-mono text-slate-500 text-center">
+          Требует HTTPS и аппаратный контроллер на устройстве
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК В: 8. ПИТАНИЕ И СЕТЬ                 -->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-emerald-500/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Питание & Сеть</h2>
+                <p class="text-xs text-slate-400 font-mono">Battery & Network Information</p>
+              </div>
+            </div>
+            <span id="netOnlineBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+              ONLINE
+            </span>
+          </div>
+
+          <!-- Battery & Network Visual Gauges -->
+          <div class="mt-4 space-y-4 font-mono text-xs">
+            <!-- Battery Section -->
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/60 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">АККУМУЛЯТОР:</span>
+                <span id="valBatteryLevel" class="text-emerald-400 font-bold text-sm">--%</span>
+              </div>
+              <div class="w-full h-2.5 bg-slate-900 rounded-full border border-slate-800 overflow-hidden">
+                <div id="batteryProgressBar" class="h-full bg-emerald-500 w-0 transition-all duration-300"></div>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-slate-500">
+                <span>СТАТУС: <strong id="valBatteryCharging" class="text-slate-300">--</strong></span>
+                <span>ВРЕМЯ: <strong id="valBatteryTime" class="text-slate-300">--</strong></span>
+              </div>
+            </div>
+
+            <!-- Network Section -->
+            <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/60 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">ТИП СЕТИ:</span>
+                <span id="valNetType" class="text-cyan-400 font-bold">4G / HIGH-SPEED</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-900">
+                <div>
+                  <span class="text-slate-500 block text-[9px]">ПРОПУСКНАЯ СПОСОБНОСТЬ:</span>
+                  <span id="valNetDownlink" class="text-slate-200 font-bold">-- Мбит/с</span>
+                </div>
+                <div>
+                  <span class="text-slate-500 block text-[9px]">ЗАДЕРЖКА (RTT):</span>
+                  <span id="valNetRtt" class="text-slate-200 font-bold">-- мс</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnRefreshSystem" class="flex-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors border border-slate-700">
+            Обновить статус питания и сети
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- БЛОК В: 9. ВИРТУАЛЬНЫЕ ДАТЧИКИ И БИОМЕТРИЯ-->
+      <!-- ========================================== -->
+      <section class="bg-slate-900/70 backdrop-blur border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-amber-500/40 transition-colors">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold tracking-wide text-white uppercase">Система & Биометрия</h2>
+                <p class="text-xs text-slate-400 font-mono">WebAuthn, Screen & Visibility</p>
+              </div>
+            </div>
+            <span id="pageVisibilityBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+              VISIBLE
+            </span>
+          </div>
+
+          <!-- Virtual Sensors Specs -->
+          <div class="mt-4 space-y-2 font-mono text-xs">
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 flex justify-between">
+              <span class="text-slate-500">ОРИЕНТАЦИЯ ЭКРАНА:</span>
+              <span id="valScreenOrientation" class="text-slate-200">PORTRAIT-PRIMARY</span>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 flex justify-between">
+              <span class="text-slate-500">РАЗРЕШЕНИЕ И DPI:</span>
+              <span id="valScreenResolution" class="text-slate-200">-- × -- (@1x)</span>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 flex justify-between">
+              <span class="text-slate-500">ПАМЯТЬ УСТРОЙСТВА:</span>
+              <span id="valDeviceMemory" class="text-slate-200">~-- ГБ RAM</span>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60 flex justify-between">
+              <span class="text-slate-500">БИОМЕТРИЯ (HELLO/TOUCHID):</span>
+              <span id="valBiometricsSupport" class="text-amber-400 font-bold">ПРОВЕРКА...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls: Biometrics Test Button -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+          <button id="btnTestBiometrics" class="flex-1 px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs font-medium transition-colors border border-amber-500/30 flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11a7.96 7.96 0 00.99 3.868" />
+            </svg>
+            <span>Тест Биометрического Сканера</span>
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="mt-8 text-center text-xs font-mono text-slate-600 space-y-1">
+      <div>WEB SENSOR HUB // TELEMETRY & HARDWARE DIAGNOSTICS SUITE</div>
+      <div>Стандарты W3C Sensors API / Permissions API / WebAudio / WebGL</div>
+    </footer>
+
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+  <!-- Hidden Canvas for Video Brightness Fallback -->
+  <canvas id="hiddenVideoCanvas" class="hidden" width="32" height="32"></canvas>
+
+  <!-- ================================================================= -->
+  <!-- JAVASCRIPT: ARCHITECTURE, SENSORS & THREE.JS LOGIC                -->
+  <!-- ================================================================= -->
+  <script>
+    /* ==================================================================
+       1. СИСТЕМА УВЕДОМЛЕНИЙ (TOAST NOTIFICATIONS)
+       ================================================================== */
+    class ToastManager {
+      constructor(containerId = 'toastContainer') {
+        this.container = document.getElementById(containerId);
+      }
+
+      show(message, type = 'info', duration = 4000) {
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transform transition-all duration-300 translate-y-4 opacity-0 text-xs font-mono`;
+
+        let borderClass = 'border-slate-800 bg-slate-900/90 text-slate-200';
+        let iconSvg = '';
+
+        if (type === 'success') {
+          borderClass = 'border-emerald-500/40 bg-slate-900/95 text-emerald-300 shadow-emerald-950/30';
+          iconSvg = `<svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+        } else if (type === 'error') {
+          borderClass = 'border-rose-500/40 bg-slate-900/95 text-rose-300 shadow-rose-950/30';
+          iconSvg = `<svg class="w-4 h-4 text-rose-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>`;
+        } else if (type === 'warning') {
+          borderClass = 'border-amber-500/40 bg-slate-900/95 text-amber-300 shadow-amber-950/30';
+          iconSvg = `<svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`;
+        } else {
+          borderClass = 'border-cyan-500/40 bg-slate-900/95 text-cyan-300 shadow-cyan-950/30';
+          iconSvg = `<svg class="w-4 h-4 text-cyan-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+        }
+
+        toast.className += ` ${borderClass}`;
+        toast.innerHTML = `
+          ${iconSvg}
+          <div class="flex-1 break-words">${message}</div>
+          <button class="text-slate-400 hover:text-white ml-1 text-sm font-sans">&times;</button>
+        `;
+
+        const closeBtn = toast.querySelector('button');
+        closeBtn.onclick = () => this.dismiss(toast);
+
+        this.container.appendChild(toast);
+
+        // Animate entrance
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-4', 'opacity-0');
+        });
+
+        // Auto dismiss
+        if (duration > 0) {
+          setTimeout(() => this.dismiss(toast), duration);
+        }
+      }
+
+      dismiss(toast) {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(() => {
+          if (toast.parentElement) toast.parentElement.removeChild(toast);
+        }, 300);
+      }
+    }
+
+    const toast = new ToastManager();
+
+    /* ==================================================================
+       2. ПРОВЕРКА БЕЗОПАСНОСТИ (HTTPS / LOCALHOST)
+       ================================================================== */
+    function checkSecurityContext() {
+      const isHttps = window.location.protocol === 'https:' || 
+                      window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1';
+      
+      const badge = document.getElementById('httpsBadge');
+      const text = document.getElementById('httpsText');
+      const dot = badge.querySelector('span');
+
+      if (isHttps) {
+        badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border border-emerald-500/30 bg-emerald-950/30 text-emerald-400';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        text.textContent = 'HTTPS SECURE (ВСЕ API РАЗРЕШЕНЫ)';
+      } else {
+        badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border border-amber-500/40 bg-amber-950/30 text-amber-300';
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        text.textContent = 'HTTP (ЧАСТЬ WEB API МОЖЕТ БЫТЬ ЗАБЛОКИРОВАНА)';
+        toast.show('Внимание: Многие Web API (сенсоры, Bluetooth, камера) требуют HTTPS соединения или localhost.', 'warning', 6000);
+      }
+    }
+
+    /* ==================================================================
+       3. 3D-ОРИЕНТАЦИЯ & THREE.JS (ГИРОСКОП)
+       ================================================================== */
+    class Phone3DVisualizer {
+      constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 1000);
+        this.camera.position.set(0, 0, 7.5);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.container.appendChild(this.renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        this.scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+        dirLight.position.set(5, 10, 7);
+        this.scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x10b981, 1, 20);
+        pointLight.position.set(-5, -5, 5);
+        this.scene.add(pointLight);
+
+        // Build Phone 3D Model
+        this.phoneGroup = new THREE.Group();
+        this.scene.add(this.phoneGroup);
+        this.buildPhone();
+
+        // Target Euler angles
+        this.targetRotation = new THREE.Euler(0, 0, 0, 'YXZ');
+        this.isInteractingWithMouse = false;
+        this.mousePos = { x: 0, y: 0 };
+        this.hasPhysicalGyro = false;
+
+        this.setupInteraction();
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+
+        // Window resize observer
+        window.addEventListener('resize', () => this.onResize());
+      }
+
+      buildPhone() {
+        // Phone chassis
+        const chassisGeo = new THREE.BoxGeometry(2.4, 4.8, 0.28);
+        const chassisMat = new THREE.MeshStandardMaterial({
+          color: 0x090d16,
+          metalness: 0.9,
+          roughness: 0.2,
+        });
+        const chassis = new THREE.Mesh(chassisGeo, chassisMat);
+        this.phoneGroup.add(chassis);
+
+        // Bezel / Frame accent
+        const frameEdges = new THREE.EdgesGeometry(chassisGeo);
+        const frameLine = new THREE.LineSegments(
+          frameEdges,
+          new THREE.LineBasicMaterial({ color: 0x06b6d4, linewidth: 2 })
+        );
+        this.phoneGroup.add(frameLine);
+
+        // Front Screen Glass
+        const screenGeo = new THREE.PlaneGeometry(2.15, 4.4);
+        
+        // Dynamic Canvas texture for the phone screen
+        this.screenCanvas = document.createElement('canvas');
+        this.screenCanvas.width = 256;
+        this.screenCanvas.height = 512;
+        this.screenCtx = this.screenCanvas.getContext('2d');
+        this.screenTexture = new THREE.CanvasTexture(this.screenCanvas);
+
+        this.updateScreenTexture(0, 0, 0);
+
+        const screenMat = new THREE.MeshBasicMaterial({
+          map: this.screenTexture,
+        });
+        const screen = new THREE.Mesh(screenGeo, screenMat);
+        screen.position.z = 0.145;
+        this.phoneGroup.add(screen);
+
+        // Camera Bump on Back
+        const camBumpGeo = new THREE.BoxGeometry(0.8, 1.2, 0.08);
+        const camBumpMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+        const camBump = new THREE.Mesh(camBumpGeo, camBumpMat);
+        camBump.position.set(-0.6, 1.5, -0.16);
+        this.phoneGroup.add(camBump);
+      }
+
+      updateScreenTexture(alpha, beta, gamma) {
+        const ctx = this.screenCtx;
+        ctx.fillStyle = '#030712';
+        ctx.fillRect(0, 0, 256, 512);
+
+        // Tech grid lines
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.2)';
+        ctx.lineWidth = 1;
+        for (let y = 30; y < 512; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(256, y);
+          ctx.stroke();
+        }
+
+        // Header
+        ctx.fillStyle = '#06b6d4';
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText('SENSOR HUB 3D', 24, 60);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px monospace';
+        ctx.fillText('REALTIME GYRO', 24, 85);
+
+        // Gyro crosshair
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(128, 256, 60, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(128, 180);
+        ctx.lineTo(128, 332);
+        ctx.moveTo(52, 256);
+        ctx.lineTo(204, 256);
+        ctx.stroke();
+
+        // Angle readouts on phone screen
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '16px monospace';
+        ctx.fillText(`α: ${alpha.toFixed(1)}°`, 30, 380);
+        ctx.fillText(`β: ${beta.toFixed(1)}°`, 30, 410);
+        ctx.fillText(`γ: ${gamma.toFixed(1)}°`, 30, 440);
+
+        if (this.screenTexture) this.screenTexture.needsUpdate = true;
+      }
+
+      setupInteraction() {
+        const dom = this.renderer.domElement;
+
+        const onPointerDown = (e) => {
+          this.isInteractingWithMouse = true;
+          this.mousePos = { x: e.clientX, y: e.clientY };
+          document.getElementById('threeInteractionMode').textContent = 'РУЧНОЙ РЕЖИМ (АКТИВЕН)';
+        };
+
+        const onPointerMove = (e) => {
+          if (!this.isInteractingWithMouse) return;
+          const deltaX = (e.clientX - this.mousePos.x) * 0.01;
+          const deltaY = (e.clientY - this.mousePos.y) * 0.01;
+
+          this.phoneGroup.rotation.y += deltaX;
+          this.phoneGroup.rotation.x += deltaY;
+
+          this.mousePos = { x: e.clientX, y: e.clientY };
+
+          // Update UI readouts from manual rotation
+          const degY = THREE.MathUtils.radToDeg(this.phoneGroup.rotation.y) % 360;
+          const degX = THREE.MathUtils.radToDeg(this.phoneGroup.rotation.x) % 360;
+          document.getElementById('valAlpha').textContent = `${(degY < 0 ? degY + 360 : degY).toFixed(1)}°`;
+          document.getElementById('valBeta').textContent = `${degX.toFixed(1)}°`;
+          this.updateScreenTexture(degY, degX, 0);
+        };
+
+        const onPointerUp = () => {
+          this.isInteractingWithMouse = false;
+        };
+
+        dom.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      }
+
+      setOrientation(alpha, beta, gamma) {
+        this.hasPhysicalGyro = true;
+        document.getElementById('threeInteractionMode').textContent = 'ГИРОСКОП (АКТИВЕН)';
+
+        // Standard deviceorientation conversion to Euler angles
+        // alpha: Z-axis rotation [0, 360]
+        // beta: X-axis rotation [-180, 180]
+        // gamma: Y-axis rotation [-90, 90]
+        const radBeta = THREE.MathUtils.degToRad(beta || 0);
+        const radGamma = THREE.MathUtils.degToRad(gamma || 0);
+        const radAlpha = THREE.MathUtils.degToRad(alpha || 0);
+
+        this.targetRotation.set(radBeta, -radGamma, -radAlpha);
+        this.updateScreenTexture(alpha || 0, beta || 0, gamma || 0);
+      }
+
+      resetOrientation() {
+        this.targetRotation.set(0, 0, 0);
+        this.phoneGroup.rotation.set(0, 0, 0);
+        this.updateScreenTexture(0, 0, 0);
+        document.getElementById('valAlpha').textContent = '0.0°';
+        document.getElementById('valBeta').textContent = '0.0°';
+        document.getElementById('valGamma').textContent = '0.0°';
+        toast.show('Ориентация 3D модели сброшена в 0°', 'info');
+      }
+
+      onResize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+      }
+
+      animate() {
+        requestAnimationFrame(this.animate);
+
+        // If not dragging manually and has target orientation, smoothly interpolate
+        if (!this.isInteractingWithMouse) {
+          if (this.hasPhysicalGyro) {
+            this.phoneGroup.rotation.x = THREE.MathUtils.lerp(this.phoneGroup.rotation.x, this.targetRotation.x, 0.2);
+            this.phoneGroup.rotation.y = THREE.MathUtils.lerp(this.phoneGroup.rotation.y, this.targetRotation.y, 0.2);
+            this.phoneGroup.rotation.z = THREE.MathUtils.lerp(this.phoneGroup.rotation.z, this.targetRotation.z, 0.2);
+          } else {
+            // Idle subtle float animation on desktop
+            this.phoneGroup.position.y = Math.sin(Date.now() * 0.0015) * 0.12;
+          }
+        }
+
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    let phone3D = null;
+
+    /* ==================================================================
+       4. ОБРАБОТЧИК ДАТЧИКА ОРИЕНТАЦИИ (DEVICE ORIENTATION)
+       ================================================================== */
+    let gyroActive = false;
+
+    async function requestDeviceOrientation() {
+      if (!window.DeviceOrientationEvent) {
+        toast.show('DeviceOrientationEvent не поддерживается данным браузером', 'error');
+        return false;
+      }
+
+      // iOS 13+ permission request requirement
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const permission = await DeviceOrientationEvent.requestPermission();
+          if (permission !== 'granted') {
+            toast.show('Доступ к гироскопу отклонен пользователем (iOS)', 'warning');
+            return false;
+          }
+        } catch (e) {
+          toast.show(`Ошибка запроса прав ориентации: ${e.message}`, 'error');
+          return false;
+        }
+      }
+
+      window.addEventListener('deviceorientation', handleOrientationEvent);
+      gyroActive = true;
+      
+      const badge = document.getElementById('gyroStatusBadge');
+      badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+      badge.textContent = 'ONLINE';
+      toast.show('Гироскоп успешно активирован!', 'success');
+      return true;
+    }
+
+    function handleOrientationEvent(event) {
+      const alpha = event.alpha ?? 0;
+      const beta = event.beta ?? 0;
+      const gamma = event.gamma ?? 0;
+
+      document.getElementById('valAlpha').textContent = `${alpha.toFixed(1)}°`;
+      document.getElementById('valBeta').textContent = `${beta.toFixed(1)}°`;
+      document.getElementById('valGamma').textContent = `${gamma.toFixed(1)}°`;
+
+      if (phone3D) {
+        phone3D.setOrientation(alpha, beta, gamma);
+      }
+
+      // Compass sync if webkitCompassHeading is absent
+      if (event.webkitCompassHeading !== undefined) {
+        updateCompassDisplay(event.webkitCompassHeading);
+      } else if (event.absolute && alpha !== null) {
+        updateCompassDisplay((360 - alpha) % 360);
+      }
+    }
+
+    /* ==================================================================
+       5. АКСЕЛЕРОМЕТР, ОСЦИЛЛОГРАФ И ДЕТЕКТОР ВСТРЯХИВАНИЯ (SHAKE)
+       ================================================================== */
+    class AccelerometerManager {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.historySize = 120;
+        this.history = [];
+        for (let i = 0; i < this.historySize; i++) {
+          this.history.push({ x: 0, y: 0, z: 0 });
+        }
+
+        this.isActive = false;
+        this.shakeCount = 0;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.lastZ = 0;
+        this.lastShakeTimestamp = 0;
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.render = this.render.bind(this);
+        requestAnimationFrame(this.render);
+      }
+
+      resize() {
+        this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+        this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio;
+      }
+
+      async start() {
+        if (!window.DeviceMotionEvent) {
+          toast.show('DeviceMotionEvent не поддерживается этим устройством', 'error');
+          return false;
+        }
+
+        // iOS 13+ permission
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+          try {
+            const permission = await DeviceMotionEvent.requestPermission();
+            if (permission !== 'granted') {
+              toast.show('Доступ к акселерометру отклонен пользователем (iOS)', 'warning');
+              return false;
+            }
+          } catch (e) {
+            toast.show(`Ошибка запроса прав акселерометра: ${e.message}`, 'error');
+            return false;
+          }
+        }
+
+        window.addEventListener('devicemotion', (e) => this.handleMotion(e));
+        this.isActive = true;
+        toast.show('Акселерометр запущен!', 'success');
+        return true;
+      }
+
+      handleMotion(event) {
+        const acc = event.accelerationIncludingGravity || event.acceleration;
+        if (!acc || acc.x === null) return;
+
+        const x = acc.x || 0;
+        const y = acc.y || 0;
+        const z = acc.z || 0;
+
+        document.getElementById('valAccX').textContent = x.toFixed(2);
+        document.getElementById('valAccY').textContent = y.toFixed(2);
+        document.getElementById('valAccZ').textContent = z.toFixed(2);
+
+        this.history.shift();
+        this.history.push({ x, y, z });
+
+        // Shake detection logic
+        const delta = Math.abs(x - this.lastX) + Math.abs(y - this.lastY) + Math.abs(z - this.lastZ);
+        const now = performance.now();
+
+        // Threshold of ~22 m/s² delta with 700ms cooldown
+        if (delta > 22 && (now - this.lastShakeTimestamp > 700)) {
+          this.lastShakeTimestamp = now;
+          this.triggerShake();
+        }
+
+        this.lastX = x;
+        this.lastY = y;
+        this.lastZ = z;
+      }
+
+      triggerShake() {
+        this.shakeCount++;
+        document.getElementById('valShakeCount').textContent = this.shakeCount;
+
+        // Visual flash & shake effect
+        const card = document.getElementById('shakeCard');
+        const indicator = document.getElementById('shakeIndicator');
+
+        card.classList.add('border-emerald-400', 'glow-emerald', 'animate-shake');
+        indicator.textContent = 'ТРЯСКА ОБНАРУЖЕНА!';
+        indicator.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-500 text-slate-950 font-bold';
+
+        // Haptic feedback
+        if ('vibrate' in navigator) {
+          try { navigator.vibrate([70, 40, 70]); } catch (e) {}
+        }
+
+        setTimeout(() => {
+          card.classList.remove('border-emerald-400', 'glow-emerald', 'animate-shake');
+          indicator.textContent = 'ТРЯСКА: НЕТ';
+          indicator.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700';
+        }, 600);
+      }
+
+      simulateShake() {
+        // Feed mock sudden acceleration surge
+        for (let i = 0; i < 5; i++) {
+          this.history.shift();
+          this.history.push({
+            x: (Math.random() - 0.5) * 45,
+            y: (Math.random() - 0.5) * 45,
+            z: (Math.random() - 0.5) * 45,
+          });
+        }
+        this.triggerShake();
+        toast.show('Симулирован жест встряхивания устройства!', 'info');
+      }
+
+      render() {
+        requestAnimationFrame(this.render);
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.fillStyle = '#030712';
+        ctx.fillRect(0, 0, w, h);
+
+        // Center zero line
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, h / 2);
+        ctx.lineTo(w, h / 2);
+        ctx.stroke();
+
+        // Range scale: ±20 m/s²
+        const maxRange = 25;
+        const stepX = w / (this.historySize - 1);
+
+        const drawAxis = (axisKey, color) => {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2 * window.devicePixelRatio;
+          ctx.beginPath();
+          for (let i = 0; i < this.history.length; i++) {
+            const val = this.history[i][axisKey];
+            const px = i * stepX;
+            const py = (h / 2) - (val / maxRange) * (h / 2);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        };
+
+        drawAxis('x', '#f43f5e'); // Rose
+        drawAxis('y', '#10b981'); // Emerald
+        drawAxis('z', '#38bdf8'); // Sky
+      }
+    }
+
+    let accelManager = null;
+
+    /* ==================================================================
+       6. ГЕОЛОКАЦИЯ И КОМПАС (GEOLOCATION & HEADING)
+       ================================================================== */
+    let geoWatchId = null;
+
+    function startGeolocation() {
+      if (!('geolocation' in navigator)) {
+        toast.show('Geolocation API не поддерживается данным браузером', 'error');
+        return;
+      }
+
+      const badge = document.getElementById('geoStatusBadge');
+      badge.textContent = 'ПОИСК GPS...';
+      badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-950/80 text-amber-400 border border-amber-800/60 animate-pulse';
+
+      geoWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const coords = pos.coords;
+          document.getElementById('valLat').textContent = `${coords.latitude.toFixed(6)}°`;
+          document.getElementById('valLng').textContent = `${coords.longitude.toFixed(6)}°`;
+          document.getElementById('valAccuracy').textContent = `±${coords.accuracy ? coords.accuracy.toFixed(1) : '--'} м`;
+          document.getElementById('valAltitude').textContent = coords.altitude !== null ? `${coords.altitude.toFixed(1)} м` : 'н/д';
+          
+          const speedKmH = coords.speed !== null ? (coords.speed * 3.6).toFixed(1) : '0.0';
+          document.getElementById('valSpeed').textContent = `${speedKmH} км/ч`;
+
+          // If GPS provides heading while moving
+          if (coords.heading !== null && !isNaN(coords.heading)) {
+            updateCompassDisplay(coords.heading);
+          }
+
+          // Enable map link
+          const mapBtn = document.getElementById('btnOpenMaps');
+          mapBtn.href = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
+          mapBtn.classList.remove('pointer-events-none', 'opacity-50');
+          mapBtn.classList.add('text-cyan-400', 'border-cyan-500/40');
+
+          badge.textContent = 'GPS ACTIVE';
+          badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+        },
+        (err) => {
+          badge.textContent = 'ОШИБКА';
+          badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-rose-950/80 text-rose-400 border border-rose-800/60';
+          toast.show(`Геолокация: ${err.message}`, 'error');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 1000
+        }
+      );
+
+      toast.show('Запрос спутникового GPS запущен...', 'info');
+    }
+
+    function updateCompassDisplay(deg) {
+      if (deg === undefined || deg === null || isNaN(deg)) return;
+      const angle = (deg + 360) % 360;
+      const needle = document.getElementById('compassNeedle');
+      if (needle) {
+        needle.style.transform = `rotate(${-angle}deg)`;
+      }
+
+      document.getElementById('valHeadingDeg').textContent = `${Math.round(angle)}°`;
+
+      // Cardinal heading direction
+      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      const index = Math.round(angle / 45) % 8;
+      document.getElementById('valHeadingDir').textContent = directions[index];
+    }
+
+    /* ==================================================================
+       7. КАМЕРА & ДАТЧИК ОСВЕЩЕННОСТИ (AMBIENT LIGHT + VIDEO FALLBACK)
+       ================================================================== */
+    let cameraStream = null;
+    let videoLumaInterval = null;
+    let nativeLightSensor = null;
+
+    async function toggleCamera() {
+      const video = document.getElementById('cameraVideo');
+      const placeholder = document.getElementById('cameraPlaceholder');
+      const hud = document.getElementById('cameraHud');
+      const btn = document.getElementById('btnToggleCamera');
+
+      if (cameraStream) {
+        // Stop camera
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+        if (videoLumaInterval) clearInterval(videoLumaInterval);
+
+        video.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        hud.classList.add('hidden');
+        btn.textContent = 'Включить Камеру';
+        toast.show('Видеопоток камеры остановлен', 'info');
+        return;
+      }
+
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+        video.srcObject = cameraStream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        hud.classList.remove('hidden');
+        btn.textContent = 'Остановить Камеру';
+
+        toast.show('Камера успешно запущена!', 'success');
+
+        // Start video fallback luminance sampling
+        startVideoLumaAnalysis(video);
+      } catch (err) {
+        toast.show(`Ошибка доступа к камере: ${err.message}`, 'error');
+      }
+    }
+
+    function startVideoLumaAnalysis(videoElement) {
+      if (nativeLightSensor) return; // If native hardware sensor is active, prioritize it
+
+      const hiddenCanvas = document.getElementById('hiddenVideoCanvas');
+      const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+
+      const methodBadge = document.getElementById('lightSensorMethod');
+      methodBadge.textContent = 'ОПТИКА (КАМЕРА)';
+      methodBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-cyan-950/80 text-cyan-400 border border-cyan-800/60';
+
+      if (videoLumaInterval) clearInterval(videoLumaInterval);
+
+      videoLumaInterval = setInterval(() => {
+        if (!cameraStream || videoElement.readyState < 2) return;
+        
+        hiddenCtx.drawImage(videoElement, 0, 0, 32, 32);
+        const data = hiddenCtx.getImageData(0, 0, 32, 32).data;
+        let totalLuma = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+          // Standard ITU-R BT.601 perceptual luminance formula
+          totalLuma += 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        }
+
+        const avgLuma = totalLuma / (data.length / 4); // 0 to 255
+        // Estimate lux scale: non-linear gamma curve to lux
+        const estimatedLux = Math.round(Math.pow(avgLuma / 255, 2.0) * 900 + (avgLuma > 5 ? 10 : 0));
+
+        updateLuxDisplay(estimatedLux);
+      }, 250);
+    }
+
+    function startNativeAmbientLightSensor() {
+      const methodBadge = document.getElementById('lightSensorMethod');
+
+      if (!('AmbientLightSensor' in window)) {
+        toast.show('AmbientLightSensor API не поддерживается браузером (активирован расчет по камере)', 'warning');
+        return false;
+      }
+
+      try {
+        nativeLightSensor = new AmbientLightSensor();
+        nativeLightSensor.onreading = () => {
+          updateLuxDisplay(Math.round(nativeLightSensor.illuminance));
+        };
+        nativeLightSensor.onerror = (event) => {
+          toast.show(`Датчик освещенности: ${event.error.name}`, 'warning');
+        };
+        nativeLightSensor.start();
+
+        methodBadge.textContent = 'ДАТЧИК LX (HARDWARE)';
+        methodBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+        toast.show('Аппаратный датчик освещенности запущен!', 'success');
+        return true;
+      } catch (err) {
+        toast.show(`Ошибка AmbientLightSensor: ${err.message}`, 'error');
+        return false;
+      }
+    }
+
+    function updateLuxDisplay(lux) {
+      document.getElementById('valLux').textContent = `${lux} lx`;
+      const luxBar = document.getElementById('luxBar');
+      const percent = Math.min(100, Math.max(0, (lux / 1000) * 100));
+      luxBar.style.width = `${percent}%`;
+    }
+
+    /* ==================================================================
+       8. МИКРОФОН И СПЕКТРОАНАЛИЗАТОР (WEB AUDIO API)
+       ================================================================== */
+    class AudioSpectrumManager {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.audioCtx = null;
+        this.analyser = null;
+        this.dataArray = null;
+        this.timeData = null;
+        this.stream = null;
+        this.isRunning = false;
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.render = this.render.bind(this);
+      }
+
+      resize() {
+        this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+        this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio;
+      }
+
+      async toggle() {
+        const btn = document.getElementById('btnToggleAudio');
+        const badge = document.getElementById('audioStatusBadge');
+
+        if (this.isRunning) {
+          if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+          if (this.audioCtx) this.audioCtx.close();
+          this.isRunning = false;
+
+          badge.textContent = 'STANDBY';
+          badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700';
+          btn.textContent = 'Запустить Микрофон';
+          document.getElementById('valDecibels').textContent = '-- dB';
+          document.getElementById('volumeBar').style.width = '0%';
+          toast.show('Микрофон отключен', 'info');
+          return;
+        }
+
+        try {
+          this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          this.audioCtx = new AudioContextClass();
+          
+          const source = this.audioCtx.createMediaStreamSource(this.stream);
+          this.analyser = this.audioCtx.createAnalyser();
+          this.analyser.fftSize = 64; // 32 frequency bins
+          this.analyser.smoothingTimeConstant = 0.8;
+
+          source.connect(this.analyser);
+
+          this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+          this.timeData = new Uint8Array(this.analyser.fftSize);
+
+          this.isRunning = true;
+          badge.textContent = 'ONLINE';
+          badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+          btn.textContent = 'Остановить Микрофон';
+          toast.show('Аудио анализатор запущен!', 'success');
+
+          requestAnimationFrame(this.render);
+        } catch (err) {
+          toast.show(`Ошибка микрофона: ${err.message}`, 'error');
+        }
+      }
+
+      render() {
+        if (!this.isRunning) return;
+        requestAnimationFrame(this.render);
+
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        this.analyser.getByteFrequencyData(this.dataArray);
+        this.analyser.getByteTimeDomainData(this.timeData);
+
+        // Calculate approximate RMS & Decibels
+        let sumSquares = 0;
+        for (let i = 0; i < this.timeData.length; i++) {
+          const norm = (this.timeData[i] - 128) / 128;
+          sumSquares += norm * norm;
+        }
+        const rms = Math.sqrt(sumSquares / this.timeData.length);
+        // Map RMS to practical dB SPL estimation ~30-100 dB
+        const dB = Math.max(30, Math.min(105, Math.round(20 * Math.log10(rms + 1e-4) + 95)));
+
+        document.getElementById('valDecibels').textContent = `${dB} dB`;
+        
+        // Category
+        const cat = document.getElementById('noiseCategory');
+        if (dB < 45) cat.textContent = 'ТИХО';
+        else if (dB < 75) cat.textContent = 'НОРМА (РАЗГОВОР)';
+        else cat.textContent = 'ВЫСОКИЙ ШУМ';
+
+        // Progress bar
+        const volPercent = Math.min(100, Math.max(0, ((dB - 30) / 75) * 100));
+        document.getElementById('volumeBar').style.width = `${volPercent}%`;
+
+        // Render Equalizer Spectrum Bars
+        ctx.fillStyle = '#030712';
+        ctx.fillRect(0, 0, w, h);
+
+        const barCount = this.dataArray.length;
+        const gap = 3 * window.devicePixelRatio;
+        const totalGap = gap * (barCount - 1);
+        const barWidth = (w - totalGap) / barCount;
+
+        for (let i = 0; i < barCount; i++) {
+          const val = this.dataArray[i]; // 0 to 255
+          const barHeight = (val / 255) * (h * 0.9);
+          const x = i * (barWidth + gap);
+          const y = h - barHeight;
+
+          // Gradient color: violet -> cyan -> emerald
+          const grad = ctx.createLinearGradient(0, y, 0, h);
+          grad.addColorStop(0, '#8b5cf6');
+          grad.addColorStop(0.5, '#06b6d4');
+          grad.addColorStop(1, '#10b981');
+
+          ctx.fillStyle = grad;
+          ctx.fillRect(x, y, barWidth, barHeight);
+
+          // Top peak cap
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x, y - 2, barWidth, 2);
+        }
+      }
+    }
+
+    let audioManager = null;
+
+    /* ==================================================================
+       9. ТАЧПАД, СТИЛУС & ВИБРОМОТОР (POINTER & VIBRATION API)
+       ================================================================== */
+    class TouchpadManager {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.pointers = new Map();
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupEvents();
+        this.render = this.render.bind(this);
+        requestAnimationFrame(this.render);
+
+        // Check vibration capability
+        const vibeText = document.getElementById('vibeSupportText');
+        if ('vibrate' in navigator) {
+          vibeText.textContent = 'ПОДДЕРЖИВАЕТСЯ';
+          vibeText.className = 'font-bold text-emerald-400 text-[10px]';
+        } else {
+          vibeText.textContent = 'НЕТ В СИСТЕМЕ';
+          vibeText.className = 'font-bold text-rose-400 text-[10px]';
+        }
+      }
+
+      resize() {
+        this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+        this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio;
+      }
+
+      setupEvents() {
+        const updatePointerData = (e) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          this.pointers.set(e.pointerId, {
+            x: x * window.devicePixelRatio,
+            y: y * window.devicePixelRatio,
+            rawX: Math.round(x),
+            rawY: Math.round(y),
+            pressure: e.pressure || (e.buttons ? 0.5 : 0),
+            tiltX: e.tiltX || 0,
+            tiltY: e.tiltY || 0,
+            pointerType: e.pointerType || 'touch',
+            timestamp: Date.now()
+          });
+
+          // Update telemetry card
+          document.getElementById('valTouchCoords').textContent = `${Math.round(x)}, ${Math.round(y)}`;
+          document.getElementById('valTouchPressure').textContent = (e.pressure || 0).toFixed(2);
+          document.getElementById('valTouchTilt').textContent = `${e.tiltX || 0}°, ${e.tiltY || 0}°`;
+          
+          const typeBadge = document.getElementById('pointerTypeBadge');
+          typeBadge.textContent = e.pointerType.toUpperCase();
+          typeBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-rose-950/80 text-rose-400 border border-rose-800/60';
+        };
+
+        this.canvas.addEventListener('pointerdown', (e) => {
+          this.canvas.setPointerCapture(e.pointerId);
+          updatePointerData(e);
+        });
+
+        this.canvas.addEventListener('pointermove', (e) => {
+          if (this.pointers.has(e.pointerId)) {
+            updatePointerData(e);
+          }
+        });
+
+        const endPointer = (e) => {
+          try { this.canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+          this.pointers.delete(e.pointerId);
+          if (this.pointers.size === 0) {
+            document.getElementById('pointerTypeBadge').textContent = 'IDLE';
+            document.getElementById('pointerTypeBadge').className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700';
+          }
+        };
+
+        this.canvas.addEventListener('pointerup', endPointer);
+        this.canvas.addEventListener('pointercancel', endPointer);
+      }
+
+      render() {
+        requestAnimationFrame(this.render);
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.fillStyle = '#030712';
+        ctx.fillRect(0, 0, w, h);
+
+        // Tech grid lines
+        ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
+        ctx.lineWidth = 1;
+        const step = 25 * window.devicePixelRatio;
+        for (let x = 0; x < w; x += step) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y < h; y += step) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        // Draw active contact points
+        for (const [id, pt] of this.pointers) {
+          const radius = Math.max(12, pt.pressure * 45) * window.devicePixelRatio;
+
+          // Outer ripple glow
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.25)';
+          ctx.fill();
+          ctx.strokeStyle = '#f43f5e';
+          ctx.lineWidth = 2 * window.devicePixelRatio;
+          ctx.stroke();
+
+          // Center core
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 4 * window.devicePixelRatio, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          // Tilt vector line (Stylus support)
+          if (pt.tiltX !== 0 || pt.tiltY !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(pt.x, pt.y);
+            ctx.lineTo(
+              pt.x + (pt.tiltX * 0.8) * window.devicePixelRatio,
+              pt.y + (pt.tiltY * 0.8) * window.devicePixelRatio
+            );
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2 * window.devicePixelRatio;
+            ctx.stroke();
+          }
+
+          // Label
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = `${10 * window.devicePixelRatio}px monospace`;
+          ctx.fillText(`P: ${pt.pressure.toFixed(2)} | ${pt.pointerType}`, pt.x + radius + 6, pt.y);
+        }
+      }
+    }
+
+    let touchpad = null;
+
+    function triggerVibration(pattern) {
+      if (!('vibrate' in navigator)) {
+        toast.show('Vibration API не поддерживается этой системой', 'warning');
+        return;
+      }
+      try {
+        navigator.vibrate(pattern);
+        toast.show('Виброотклик выполнен!', 'info');
+      } catch (err) {
+        toast.show(`Ошибка вибрации: ${err.message}`, 'error');
+      }
+    }
+
+    /* ==================================================================
+       10. IoT & ВНЕШНИЕ АППАРАТНЫЕ ДАТЧИКИ (BLUETOOTH, SERIAL, NFC)
+       ================================================================== */
+    function logIotTerminal(msg, isError = false) {
+      const container = document.getElementById('iotLog');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = isError ? 'text-rose-400' : 'text-slate-300';
+      div.textContent = `[${time}] ${msg}`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function connectBluetooth() {
+      if (!('bluetooth' in navigator)) {
+        logIotTerminal('Web Bluetooth API не поддерживается данным браузером', true);
+        toast.show('Web Bluetooth не поддерживается. Используйте Chrome/Edge.', 'warning');
+        return;
+      }
+
+      logIotTerminal('Запрос диалога сканирования BLE устройств...');
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['battery_service', 'heart_rate', 0x180D, 0x180F]
+        });
+
+        logIotTerminal(`Подключено BLE устройство: "${device.name || 'Безымянное'}" (ID: ${device.id})`);
+        toast.show(`BLE устройство подключено: ${device.name || 'Device'}`, 'success');
+
+        device.addEventListener('gattserverdisconnected', () => {
+          logIotTerminal(`BLE устройство ${device.name || ''} отключено`);
+        });
+      } catch (err) {
+        logIotTerminal(`Ошибка BLE: ${err.message}`, true);
+        if (err.name !== 'NotFoundError') toast.show(`BLE: ${err.message}`, 'error');
+      }
+    }
+
+    async function connectSerial() {
+      if (!('serial' in navigator)) {
+        logIotTerminal('Web Serial API не поддерживается данным браузером', true);
+        toast.show('Web Serial не поддерживается на мобильных или в Safari/Firefox', 'warning');
+        return;
+      }
+
+      logIotTerminal('Запрос выбора COM/USB Serial порта...');
+      try {
+        const port = await navigator.serial.requestPort();
+        const info = port.getInfo();
+        const vid = info.usbVendorId ? `0x${info.usbVendorId.toString(16)}` : 'н/д';
+        const pid = info.usbProductId ? `0x${info.usbProductId.toString(16)}` : 'н/д';
+        
+        logIotTerminal(`Serial порт выбран! VendorID: ${vid}, ProductID: ${pid}`);
+        toast.show('Serial порт успешно выбран', 'success');
+      } catch (err) {
+        logIotTerminal(`Ошибка Serial: ${err.message}`, true);
+        if (err.name !== 'NotFoundError') toast.show(`Serial: ${err.message}`, 'error');
+      }
+    }
+
+    async function connectNfc() {
+      if (!('NDEFReader' in window)) {
+        logIotTerminal('Web NFC API не поддерживается этой платформой (доступно на Android Chrome)', true);
+        toast.show('Web NFC поддерживается только в Chrome на Android', 'warning');
+        return;
+      }
+
+      logIotTerminal('Инициализация NDEFReader сканера NFC...');
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+        logIotTerminal('Сканер NFC активен! Поднесите метку к корпусу устройства...');
+        toast.show('NFC сканер ждет метку!', 'info');
+
+        ndef.onreading = (event) => {
+          logIotTerminal(`Считана NFC метка! Серийный номер: ${event.serialNumber}`);
+          toast.show(`NFC метка: ${event.serialNumber}`, 'success');
+        };
+
+        ndef.onreadingerror = () => {
+          logIotTerminal('Ошибка чтения NFC метки', true);
+        };
+      } catch (err) {
+        logIotTerminal(`Ошибка NFC: ${err.message}`, true);
+        toast.show(`NFC: ${err.message}`, 'error');
+      }
+    }
+
+    /* ==================================================================
+       11. ПИТАНИЕ И СЕТЬ (BATTERY & NETWORK INFORMATION API)
+       ================================================================== */
+    async function initBatteryStatus() {
+      if (!('getBattery' in navigator)) {
+        document.getElementById('valBatteryLevel').textContent = 'Н/Д';
+        document.getElementById('valBatteryCharging').textContent = 'API не поддерживается';
+        document.getElementById('quickBattery').textContent = 'Н/Д';
+        return;
+      }
+
+      try {
+        const battery = await navigator.getBattery();
+
+        const updateBattery = () => {
+          const levelPercent = Math.round(battery.level * 100);
+          document.getElementById('valBatteryLevel').textContent = `${levelPercent}%`;
+          document.getElementById('quickBattery').textContent = `${levelPercent}%`;
+          document.getElementById('batteryProgressBar').style.width = `${levelPercent}%`;
+
+          document.getElementById('valBatteryCharging').textContent = battery.charging ? 'Заряжается ⚡' : 'От батареи';
+          
+          let timeStr = 'Не ограничено';
+          if (battery.charging && isFinite(battery.chargingTime) && battery.chargingTime > 0) {
+            timeStr = `До полной: ${Math.round(battery.chargingTime / 60)} мин`;
+          } else if (!battery.charging && isFinite(battery.dischargingTime) && battery.dischargingTime > 0) {
+            timeStr = `Осталось: ${Math.round(battery.dischargingTime / 60)} мин`;
+          }
+          document.getElementById('valBatteryTime').textContent = timeStr;
+        };
+
+        updateBattery();
+        battery.addEventListener('levelchange', updateBattery);
+        battery.addEventListener('chargingchange', updateBattery);
+      } catch (e) {
+        console.warn('Battery API error:', e);
+      }
+    }
+
+    function initNetworkStatus() {
+      const updateNet = () => {
+        const isOnline = navigator.onLine;
+        const netBadge = document.getElementById('netOnlineBadge');
+        const quickNet = document.getElementById('quickNetwork');
+
+        if (isOnline) {
+          netBadge.textContent = 'ONLINE';
+          netBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+          quickNet.textContent = 'ONLINE';
+          quickNet.className = 'text-emerald-400 font-bold';
+        } else {
+          netBadge.textContent = 'OFFLINE';
+          netBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-rose-950/80 text-rose-400 border border-rose-800/60';
+          quickNet.textContent = 'OFFLINE';
+          quickNet.className = 'text-rose-400 font-bold';
+          toast.show('Сеть потеряна: устройство в автономном режиме', 'warning');
+        }
+
+        // Connection details
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) {
+          document.getElementById('valNetType').textContent = (conn.effectiveType || conn.type || 'ONLINE').toUpperCase();
+          document.getElementById('valNetDownlink').textContent = conn.downlink ? `${conn.downlink} Мбит/с` : 'н/д';
+          document.getElementById('valNetRtt').textContent = conn.rtt ? `${conn.rtt} мс` : 'н/д';
+        }
+      };
+
+      window.addEventListener('online', updateNet);
+      window.addEventListener('offline', updateNet);
+
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn) {
+        conn.addEventListener('change', updateNet);
+      }
+      updateNet();
+    }
+
+    /* ==================================================================
+       12. ВИРТУАЛЬНЫЕ ДАТЧИКИ И БИОМЕТРИЯ (WEBAUTHN, ORIENTATION, MEMORY)
+       ================================================================== */
+    function initSystemSensors() {
+      // Screen orientation
+      const updateOrientation = () => {
+        let type = 'portrait-primary';
+        if (screen.orientation) {
+          type = screen.orientation.type;
+        } else if (window.orientation !== undefined) {
+          type = Math.abs(window.orientation) === 90 ? 'landscape' : 'portrait';
+        }
+        document.getElementById('valScreenOrientation').textContent = type.toUpperCase();
+        document.getElementById('quickOrientation').textContent = type.includes('land') ? 'LANDSCAPE' : 'PORTRAIT';
+      };
+
+      if (screen.orientation) {
+        screen.orientation.addEventListener('change', updateOrientation);
+      } else {
+        window.addEventListener('orientationchange', updateOrientation);
+      }
+      updateOrientation();
+
+      // Screen resolution & pixel ratio
+      const dpi = window.devicePixelRatio || 1;
+      document.getElementById('valScreenResolution').textContent = `${screen.width}×${screen.height} (@${dpi}x)`;
+
+      // CPU Concurrency
+      const cores = navigator.hardwareConcurrency || '--';
+      document.getElementById('quickCpu').textContent = `${cores} CORES`;
+
+      // Device Memory
+      const ram = navigator.deviceMemory ? `~${navigator.deviceMemory} ГБ RAM` : 'Не сообщается браузером';
+      document.getElementById('valDeviceMemory').textContent = ram;
+
+      // Page Visibility
+      document.addEventListener('visibilitychange', () => {
+        const visBadge = document.getElementById('pageVisibilityBadge');
+        if (document.visibilityState === 'visible') {
+          visBadge.textContent = 'VISIBLE';
+          visBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 text-emerald-400 border border-emerald-800/60';
+        } else {
+          visBadge.textContent = 'BACKGROUND';
+          visBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-950/80 text-amber-400 border border-amber-800/60';
+        }
+      });
+
+      // Biometrics support check
+      checkBiometricsAvailability();
+    }
+
+    async function checkBiometricsAvailability() {
+      const bioEl = document.getElementById('valBiometricsSupport');
+      if (!window.PublicKeyCredential) {
+        bioEl.textContent = 'НЕТ (WebAuthn не поддерживается)';
+        bioEl.className = 'text-rose-400 font-bold';
+        return;
+      }
+
+      try {
+        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        if (available) {
+          bioEl.textContent = 'ДОСТУПЕН (TouchID / Hello / PIN)';
+          bioEl.className = 'text-emerald-400 font-bold';
+        } else {
+          bioEl.textContent = 'НЕ ОБНАРУЖЕН НА УСТРОЙСТВЕ';
+          bioEl.className = 'text-slate-400 font-bold';
+        }
+      } catch (err) {
+        bioEl.textContent = 'ОШИБКА ОПРОСА';
+        bioEl.className = 'text-amber-400 font-bold';
+      }
+    }
+
+    async function testBiometricsVerification() {
+      if (!window.PublicKeyCredential) {
+        toast.show('WebAuthn API не поддерживается данным браузером', 'error');
+        return;
+      }
+
+      toast.show('Инициализация биометрического запроса к платформе...', 'info');
+
+      try {
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+        const userId = new Uint8Array(16);
+        window.crypto.getRandomValues(userId);
+
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge: challenge,
+            rp: { name: "Web Sensor Hub Diagnostics" },
+            user: {
+              id: userId,
+              name: "diagnostics@local",
+              displayName: "Тестер биометрии"
+            },
+            pubKeyCredParams: [
+              { type: "public-key", alg: -7 },  // ES256
+              { type: "public-key", alg: -257 } // RS256
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: "platform",
+              userVerification: "preferred"
+            },
+            timeout: 60000
+          }
+        });
+
+        if (credential) {
+          toast.show('Биометрическая верификация успешно пройдена!', 'success');
+        }
+      } catch (err) {
+        if (err.name === 'NotAllowedError') {
+          toast.show('Верификация отменена пользователем или время ожидания истекло', 'warning');
+        } else {
+          toast.show(`Биометрия: ${err.message}`, 'error');
+        }
+      }
+    }
+
+    /* ==================================================================
+       13. ГЛАВНАЯ КНОПКА «АКТИВИРОВАТЬ ВСЕ СЕНСОРЫ»
+       ================================================================== */
+    async function activateAllSensors() {
+      toast.show('Массовая активация датчиков запущена...', 'info');
+      let successCount = 0;
+
+      // 1. Gyro & 3D
+      try {
+        const gyroOk = await requestDeviceOrientation();
+        if (gyroOk) successCount++;
+      } catch (e) {}
+
+      // 2. Accelerometer
+      try {
+        if (accelManager) {
+          const accelOk = await accelManager.start();
+          if (accelOk) successCount++;
+        }
+      } catch (e) {}
+
+      // 3. Geolocation
+      try {
+        startGeolocation();
+        successCount++;
+      } catch (e) {}
+
+      // 4. Native Ambient Light Sensor
+      try {
+        startNativeAmbientLightSensor();
+      } catch (e) {}
+
+      // 5. Camera (optional if not started)
+      if (!cameraStream) {
+        try {
+          await toggleCamera();
+          successCount++;
+        } catch (e) {}
+      }
+
+      // 6. Audio
+      if (audioManager && !audioManager.isRunning) {
+        try {
+          await audioManager.toggle();
+          successCount++;
+        } catch (e) {}
+      }
+
+      toast.show(`Активация завершена! Датчиков включено: ${successCount}`, 'success', 5000);
+    }
+
+    /* ==================================================================
+       14. ИНИЦИАЛИЗАЦИЯ ВСЕХ КОМПОНЕНТОВ ПРИ СТАРТЕ
+       ================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. Check security protocol
+      checkSecurityContext();
+
+      // 2. Init Three.js 3D Phone Viewport
+      try {
+        phone3D = new Phone3DVisualizer('threeContainer');
+      } catch (e) {
+        console.error('Three.js init error:', e);
+      }
+
+      // 3. Init Accelerometer Oscilloscope
+      accelManager = new AccelerometerManager('accelCanvas');
+
+      // 4. Init Audio Spectrum
+      audioManager = new AudioSpectrumManager('audioCanvas');
+
+      // 5. Init Touchpad
+      touchpad = new TouchpadManager('touchpadCanvas');
+
+      // 6. Init Battery & Network
+      initBatteryStatus();
+      initNetworkStatus();
+
+      // 7. Init Virtual Sensors & System telemetry
+      initSystemSensors();
+
+      // 8. Bind Control Buttons
+      document.getElementById('btnActivateAll').onclick = activateAllSensors;
+      document.getElementById('btnRequestGyro').onclick = requestDeviceOrientation;
+      document.getElementById('btnReset3D').onclick = () => phone3D && phone3D.resetOrientation();
+      document.getElementById('btnRequestAccel').onclick = () => accelManager && accelManager.start();
+      document.getElementById('btnSimulateShake').onclick = () => accelManager && accelManager.simulateShake();
+      document.getElementById('btnRequestGeo').onclick = startGeolocation;
+      document.getElementById('btnToggleCamera').onclick = toggleCamera;
+      document.getElementById('btnRequestAmbientSensor').onclick = startNativeAmbientLightSensor;
+      document.getElementById('btnToggleAudio').onclick = () => audioManager && audioManager.toggle();
+      document.getElementById('btnVibratePulse').onclick = () => triggerVibration(100);
+      document.getElementById('btnVibrateSos').onclick = () => triggerVibration([100, 50, 100, 50, 100, 150, 300, 50, 300, 50, 300, 150, 100, 50, 100, 50, 100]);
+      document.getElementById('btnConnectBle').onclick = connectBluetooth;
+      document.getElementById('btnConnectSerial').onclick = connectSerial;
+      document.getElementById('btnConnectNfc').onclick = connectNfc;
+      document.getElementById('btnClearIotLog').onclick = () => {
+        document.getElementById('iotLog').innerHTML = '<div class="text-slate-500">[SYS] Лог очищен.</div>';
+      };
+      document.getElementById('btnRefreshSystem').onclick = () => {
+        initBatteryStatus();
+        initNetworkStatus();
+        toast.show('Телеметрия батареи и сети обновлена', 'info');
+      };
+      document.getElementById('btnTestBiometrics').onclick = testBiometricsVerification;
+
+      toast.show('Web Sensor Hub готов к работе. Нажмите «Активировать все сенсоры»', 'info', 5000);
+    });
+  </script>
+</body>
+</html>
